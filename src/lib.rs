@@ -7,6 +7,7 @@ use winit::{
     keyboard::{KeyCode, PhysicalKey},
     window::{Window, WindowBuilder},
 };
+mod camera;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -19,31 +20,6 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     0.0, 0.0, 0.0, 1.0,
 );
 
-struct Camera {
-    eye: cgmath::Point3<f32>,
-    target: cgmath::Point3<f32>,
-    up: cgmath::Vector3<f32>,
-    aspect: f32,
-    fovy: f32,
-    znear: f32,
-    zfar: f32,
-}
-
-impl Camera {
-    fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
-        // 1.
-        let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
-        log::info!("View matrix: {:?}", view);
-        // 2.
-        let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
-        log::info!("Projection matrix: {:?}", proj);
-        // 3.
-        let result = OPENGL_TO_WGPU_MATRIX * proj * view;
-        log::info!("Result matrix: {:?}", result);
-        result
-    }
-}
-
 // We need this for Rust to store our data correctly for the shaders
 #[repr(C)]
 // This is so we can store this in a buffer
@@ -51,6 +27,7 @@ impl Camera {
 struct CameraUniform {
     // We can't use cgmath with bytemuck directly, so we'll have
     // to convert the Matrix4 into a 4x4 f32 array
+    view_position: [f32; 4],
     view_proj: [[f32; 4]; 4],
 }
 
@@ -59,12 +36,13 @@ impl CameraUniform {
         use cgmath::SquareMatrix;
         Self {
             view_proj: cgmath::Matrix4::identity().into(),
+            view_position: [0.0; 4],
         }
     }
 
-    fn update_view_proj(&mut self, camera: &Camera) {
-        let matrix = camera.build_view_projection_matrix();
-        self.view_proj = matrix.into();
+    fn update_view_proj(&mut self, camera: &camera::Camera, projection: &camera::Projection) {
+        self.view_position = camera.position.to_homogeneous().into();
+        self.view_proj = (projection.calc_matrix() * camera.calc_matrix()).into();
     }
 }
 
@@ -116,100 +94,6 @@ const VERTICES: &[Vertex] = &[
 
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
-struct CameraController {
-    speed: f32,
-    is_forward_pressed: bool,
-    is_backward_pressed: bool,
-    is_left_pressed: bool,
-    is_right_pressed: bool,
-}
-
-impl CameraController {
-    fn new(speed: f32) -> Self {
-        Self {
-            speed,
-            is_forward_pressed: false,
-            is_backward_pressed: false,
-            is_left_pressed: false,
-            is_right_pressed: false,
-        }
-    }
-
-    fn process_events(&mut self, event: &WindowEvent) -> bool {
-        match event {
-            WindowEvent::KeyboardInput {
-                event:
-                    KeyEvent {
-                        state,
-                        physical_key: PhysicalKey::Code(keycode),
-                        ..
-                    },
-                ..
-            } => {
-                let is_pressed = *state == ElementState::Pressed;
-                match keycode {
-                    KeyCode::KeyW | KeyCode::ArrowUp => {
-                        self.is_forward_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyA | KeyCode::ArrowLeft => {
-                        self.is_left_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyS | KeyCode::ArrowDown => {
-                        self.is_backward_pressed = is_pressed;
-                        true
-                    }
-                    KeyCode::KeyD | KeyCode::ArrowRight => {
-                        self.is_right_pressed = is_pressed;
-                        true
-                    }
-                    _ => false,
-                }
-            }
-            _ => false,
-        }
-    }
-
-    fn update_camera(&self, camera: &mut Camera) {
-        use cgmath::InnerSpace;
-        let forward = camera.target - camera.eye;
-        let forward_norm = forward.normalize();
-        let forward_mag = forward.magnitude();
-
-        // Prevents glitching when the camera gets too close to the
-        // center of the scene.
-        if self.is_forward_pressed && forward_mag > self.speed {
-            camera.eye += forward_norm * self.speed;
-        }
-        if self.is_backward_pressed {
-            camera.eye -= forward_norm * self.speed;
-        }
-
-        let right = forward_norm.cross(camera.up);
-
-        // Redo radius calc in case the forward/backward is pressed.
-        let forward = camera.target - camera.eye;
-        let forward_mag = forward.magnitude();
-
-        if self.is_right_pressed {
-            // Rescale the distance between the target and the eye so
-            // that it doesn't change. The eye, therefore, still
-            // lies on the circle made by the target and eye.
-            camera.eye = camera.target - (forward + right * self.speed).normalize() * forward_mag;
-        }
-        if self.is_left_pressed {
-            camera.eye = camera.target - (forward - right * self.speed).normalize() * forward_mag;
-        }
-        if (self.is_forward_pressed || self.is_backward_pressed)
-            || (self.is_left_pressed || self.is_right_pressed)
-        {
-            log::info!("[camera] eye: {:?}", camera.eye);
-            log::info!("[camera] target: {:?}", camera.target);
-        }
-    }
-}
-
 struct State<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
@@ -219,16 +103,18 @@ struct State<'a> {
     clear_color: wgpu::Color,
     render_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
-    camera: Camera,
+    camera: camera::Camera,
+    projection: camera::Projection,
+    camera_controller: camera::CameraController,
+    camera_uniform: CameraUniform,
     // The window must be declared after the surface so
     // it gets dropped after it as the surface contains
     // unsafe references to the window's resources.
     window: &'a Window,
     index_buffer: wgpu::Buffer,
-    camera_uniform: CameraUniform,
+    mouse_pressed: bool,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
-    camera_controller: CameraController,
 }
 
 impl<'a> State<'a> {
@@ -304,23 +190,17 @@ impl<'a> State<'a> {
             a: 1.0,
         };
 
-        let camera = Camera {
-            // position the camera 1 unit up and 2 units back
-            // +z is out of the screen
-            eye: (0.0, 1.0, 2.0).into(),
-            // have it look at the origin
-            target: (0.0, 0.0, 0.0).into(),
-            // which way is "up"
-            up: cgmath::Vector3::unit_y(),
-            // aspect: config.width as f32 / config.height as f32,
-            aspect: if config.height > 0 { config.width as f32 / config.height as f32 } else { 1.0 },
-            fovy: 45.0,
-            znear: 0.1,
-            zfar: 100.0,
+        let camera = camera::Camera::new((0.0, 1.0, 2.0), cgmath::Deg(-90.0), cgmath::Deg(-20.0));
+        let aspect = if config.height > 0 {
+            config.width as f32 / config.height as f32
+        } else {
+            1.0
         };
+        let projection = camera::Projection::new(aspect, cgmath::Deg(45.0), 0.01, 100.0);
+        let camera_controller = camera::CameraController::new(4.0, 0.4);
 
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
+        camera_uniform.update_view_proj(&camera, &projection);
 
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
@@ -420,8 +300,6 @@ impl<'a> State<'a> {
             usage: wgpu::BufferUsages::INDEX,
         });
 
-        let camera_controller = CameraController::new(0.2);
-
         Self {
             surface,
             device,
@@ -434,10 +312,12 @@ impl<'a> State<'a> {
             index_buffer,
             camera,
             camera_uniform,
-            camera_bind_group,
             camera_buffer,
-            camera_controller,
+            camera_bind_group,
             window,
+            projection,
+            camera_controller: camera_controller,
+            mouse_pressed: false,
         }
     }
 
@@ -453,31 +333,43 @@ impl<'a> State<'a> {
             self.config.width = clamped_width;
             self.config.height = clamped_height;
             // Update camera aspect ratio when window is resized
-            self.camera.aspect = clamped_width as f32 / clamped_height as f32;
+            self.projection.resize(clamped_width, clamped_height);
             log::info!("Resized to {:?}", self.size);
             self.surface.configure(&self.device, &self.config);
         }
     }
 
-    #[allow(unused_variables)]
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::CursorMoved { position, .. } => {
-                self.clear_color = wgpu::Color {
-                    r: position.x as f64 / self.size.width as f64,
-                    g: position.y as f64 / self.size.height as f64,
-                    b: 1.0,
-                    a: 1.0,
-                };
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(key),
+                        state,
+                        ..
+                    },
+                ..
+            } => self.camera_controller.process_keyboard(*key, *state),
+            WindowEvent::MouseWheel { delta, .. } => {
+                self.camera_controller.process_scroll(delta);
                 true
             }
-            _ => self.camera_controller.process_events(event),
+            WindowEvent::MouseInput {
+                button: MouseButton::Left,
+                state,
+                ..
+            } => {
+                self.mouse_pressed = *state == ElementState::Pressed;
+                true
+            }
+            _ => false,
         }
     }
 
-    fn update(&mut self) {
-        self.camera_controller.update_camera(&mut self.camera);
-        self.camera_uniform.update_view_proj(&self.camera);
+    fn update(&mut self, dt: std::time::Duration) {
+        self.camera_controller.update_camera(&mut self.camera, dt);
+        self.camera_uniform
+            .update_view_proj(&self.camera, &self.projection);
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -566,64 +458,71 @@ pub async fn run() {
 
     // State::new uses async code, so we're going to wait for it to finish
     let mut state = State::new(&window).await;
+    let mut last_render_time = instant::Instant::now();
     let mut surface_configured = false;
 
     event_loop
         .run(move |event, control_flow| {
             match event {
+                Event::DeviceEvent {
+                    event: DeviceEvent::MouseMotion{ delta, },
+                    .. // We're not using device_id currently
+                } => if state.mouse_pressed {
+                    state.camera_controller.process_mouse(delta.0, delta.1)
+                }
                 Event::WindowEvent {
                     ref event,
                     window_id,
-                } if window_id == state.window().id() => {
-                    if !state.input(event) {
-                        // UPDATED!
-                        match event {
-                            WindowEvent::CloseRequested
-                            | WindowEvent::KeyboardInput {
-                                event:
-                                    KeyEvent {
-                                        state: ElementState::Pressed,
-                                        physical_key: PhysicalKey::Code(KeyCode::Escape),
-                                        ..
-                                    },
-                                ..
-                            } => control_flow.exit(),
-                            WindowEvent::Resized(physical_size) => {
-                                log::info!("physical_size: {physical_size:?}");
-                                surface_configured = true;
-                                state.resize(*physical_size);
-                            }
-                            WindowEvent::RedrawRequested => {
-                                // This tells winit that we want another frame after this one
-                                state.window().request_redraw();
-
-                                if !surface_configured {
-                                    return;
-                                }
-
-                                state.update();
-                                match state.render() {
-                                    Ok(_) => {}
-                                    // Reconfigure the surface if it's lost or outdated
-                                    Err(
-                                        wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated,
-                                    ) => state.resize(state.size),
-                                    // The system is out of memory, we should probably quit
-                                    Err(
-                                        wgpu::SurfaceError::OutOfMemory | wgpu::SurfaceError::Other,
-                                    ) => {
-                                        log::error!("OutOfMemory");
-                                        control_flow.exit();
-                                    }
-
-                                    // This happens when the a frame takes too long to present
-                                    Err(wgpu::SurfaceError::Timeout) => {
-                                        log::warn!("Surface timeout")
-                                    }
-                                }
-                            }
-                            _ => {}
+                } if window_id == state.window().id() && !state.input(event) => {
+                    match event {
+                        WindowEvent::CloseRequested
+                        | WindowEvent::KeyboardInput {
+                            event:
+                                KeyEvent {
+                                    state: ElementState::Pressed,
+                                    physical_key: PhysicalKey::Code(KeyCode::Escape),
+                                    ..
+                                },
+                            ..
+                        } => control_flow.exit(),
+                        WindowEvent::Resized(physical_size) => {
+                            log::info!("physical_size: {physical_size:?}");
+                            surface_configured = true;
+                            state.resize(*physical_size);
                         }
+                        WindowEvent::RedrawRequested => {
+                            // This tells winit that we want another frame after this one
+                            state.window().request_redraw();
+
+                            if !surface_configured {
+                                return;
+                            }
+
+                            let now = instant::Instant::now();
+                            let dt = now - last_render_time;
+                            last_render_time = now;
+                            state.update(dt);
+                            match state.render() {
+                                Ok(_) => {}
+                                // Reconfigure the surface if it's lost or outdated
+                                Err(
+                                    wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated,
+                                ) => state.resize(state.size),
+                                // The system is out of memory, we should probably quit
+                                Err(
+                                    wgpu::SurfaceError::OutOfMemory | wgpu::SurfaceError::Other,
+                                ) => {
+                                    log::error!("OutOfMemory");
+                                    control_flow.exit();
+                                }
+
+                                // This happens when the a frame takes too long to present
+                                Err(wgpu::SurfaceError::Timeout) => {
+                                    log::warn!("Surface timeout")
+                                }
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 _ => {}
