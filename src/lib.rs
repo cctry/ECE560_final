@@ -102,6 +102,7 @@ struct State<'a> {
     size: winit::dpi::PhysicalSize<u32>,
     clear_color: wgpu::Color,
     render_pipeline: wgpu::RenderPipeline,
+    crosshair_pipeline: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     camera: camera::Camera,
     projection: camera::Projection,
@@ -196,7 +197,7 @@ impl<'a> State<'a> {
         } else {
             1.0
         };
-        let projection = camera::Projection::new(aspect, cgmath::Deg(45.0), 0.01, 100.0);
+        let projection = camera::Projection::new(aspect, cgmath::Deg(45.0), 0.1, 100.0);
         let camera_controller = camera::CameraController::new(4.0, 0.4);
 
         let mut camera_uniform = CameraUniform::new();
@@ -240,6 +241,7 @@ impl<'a> State<'a> {
                 push_constant_ranges: &[],
             });
 
+        // Create main render pipeline
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Render Pipeline"),
             layout: Some(&render_pipeline_layout),
@@ -300,6 +302,48 @@ impl<'a> State<'a> {
             usage: wgpu::BufferUsages::INDEX,
         });
 
+        // Create crosshair pipeline
+        let crosshair_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Crosshair Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: Some("vs_crosshair"),
+                buffers: &[],
+                compilation_options: Default::default(),
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: Some("fs_crosshair"),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState {
+                        color: wgpu::BlendComponent::REPLACE,
+                        alpha: wgpu::BlendComponent::REPLACE,
+                    }),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: Default::default(),
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: None, // Don't cull the crosshair
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+            cache: None,
+        });
+
         Self {
             surface,
             device,
@@ -308,6 +352,7 @@ impl<'a> State<'a> {
             size,
             clear_color,
             render_pipeline,
+            crosshair_pipeline,
             vertex_buffer,
             index_buffer,
             camera,
@@ -411,9 +456,16 @@ impl<'a> State<'a> {
             // NEW!
             render_pass.set_pipeline(&self.render_pipeline); // 2.
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            // Draw main scene
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1); // 3.
+            render_pass.draw_indexed(0..INDICES.len() as u32, 0, 0..1);
+
+            // Draw crosshair
+            render_pass.set_pipeline(&self.crosshair_pipeline);
+            render_pass.draw(0..12, 0..1); // Drawing both vertical and horizontal lines
         }
 
         self.queue.submit(iter::once(encoder.finish()));

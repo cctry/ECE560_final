@@ -155,43 +155,49 @@ impl CameraController {
 
     pub fn update_camera(&mut self, camera: &mut Camera, dt: Duration) {
         let dt = dt.as_secs_f32();
-
-        // Move forward/backward and left/right
-        let (yaw_sin, yaw_cos) = camera.yaw.0.sin_cos();
-        let forward = Vector3::new(yaw_cos, 0.0, yaw_sin).normalize();
-        let right = Vector3::new(-yaw_sin, 0.0, yaw_cos).normalize();
-        camera.position += forward * (self.amount_forward - self.amount_backward) * self.speed * dt;
-        camera.position += right * (self.amount_right - self.amount_left) * self.speed * dt;
-
-        // Move in/out (aka. "zoom")
-        // Note: this isn't an actual zoom. The camera's position
-        // changes when zooming. I've added this to make it easier
-        // to get closer to an object you want to focus on.
+    
+        // Compute forward direction based on yaw and pitch for cgmath (RH)
         let (pitch_sin, pitch_cos) = camera.pitch.0.sin_cos();
-        let scrollward =
-            Vector3::new(pitch_cos * yaw_cos, pitch_sin, pitch_cos * yaw_sin).normalize();
-        camera.position += scrollward * self.scroll * self.speed * self.sensitivity * dt;
+        let (yaw_sin, yaw_cos) = camera.yaw.0.sin_cos();
+    
+        // Forward direction adjusted for cgmath right-handed coordinate (negative Z is forward)
+        let forward = Vector3::new(
+            pitch_cos * yaw_sin,  // X component
+            pitch_sin,            // Y component (up/down)
+            -pitch_cos * yaw_cos, // Negative Z to move into the screen
+        )
+        .normalize();
+    
+        // Right vector perpendicular to forward and global up
+        let right = forward.cross(Vector3::unit_y()).normalize();
+    
+        // Global up vector remains the same
+        let up = Vector3::unit_y();
+    
+        // Combine movements
+        let direction =
+            (forward * (self.amount_forward - self.amount_backward)
+            + right * (self.amount_right - self.amount_left)
+            + up * (self.amount_up - self.amount_down))
+            .normalize();
+    
+        // Apply combined directional movement
+        camera.position += direction * self.speed * dt;
+    
+        // Scroll zoom (optional)
+        camera.position += forward * self.scroll * self.speed * self.sensitivity * dt;
         self.scroll = 0.0;
-
-        // Move up/down. Since we don't use roll, we can just
-        // modify the y coordinate directly.
-        camera.position.y += (self.amount_up - self.amount_down) * self.speed * dt;
-
-        // Rotate
+    
+        // Rotate camera based on mouse input
         camera.yaw += Rad(self.rotate_horizontal) * self.sensitivity * dt;
         camera.pitch += Rad(-self.rotate_vertical) * self.sensitivity * dt;
-
-        // If process_mouse isn't called every frame, these values
-        // will not get set to zero, and the camera will rotate
-        // when moving in a non-cardinal direction.
+    
+        // Clamp pitch angle to avoid flipping vertically
+        camera.pitch.0 = camera.pitch.0.clamp(-SAFE_FRAC_PI_2, SAFE_FRAC_PI_2);
+    
+        // Reset mouse deltas
         self.rotate_horizontal = 0.0;
         self.rotate_vertical = 0.0;
-
-        // Keep the camera's angle from going too high/low.
-        if camera.pitch < -Rad(SAFE_FRAC_PI_2) {
-            camera.pitch = -Rad(SAFE_FRAC_PI_2);
-        } else if camera.pitch > Rad(SAFE_FRAC_PI_2) {
-            camera.pitch = Rad(SAFE_FRAC_PI_2);
-        }
     }
+    
 }
