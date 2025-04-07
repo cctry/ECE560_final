@@ -160,26 +160,49 @@ impl CameraController {
         let (pitch_sin, pitch_cos) = camera.pitch.0.sin_cos();
         let (yaw_sin, yaw_cos) = camera.yaw.0.sin_cos();
     
-        // Forward direction adjusted for cgmath right-handed coordinate (negative Z is forward)
+        // Forward direction - matching Camera::calc_matrix
         let forward = Vector3::new(
-            pitch_cos * yaw_sin,  // X component
+            pitch_cos * yaw_cos,  // X component
             pitch_sin,            // Y component (up/down)
-            -pitch_cos * yaw_cos, // Negative Z to move into the screen
+            pitch_cos * yaw_sin   // Z component
         )
         .normalize();
     
-        // Right vector perpendicular to forward and global up
-        let right = forward.cross(Vector3::unit_y()).normalize();
+        // Right vector - correctly compute for strafing
+        // Use a cross product with the world up vector (0,1,0)
+        // In a right-handed coordinate system, right = forward × up
+        let right = Vector3::new(
+            -yaw_sin,             // X component 
+            0.0,                  // Y component (no vertical movement for strafing)
+            -yaw_cos              // Z component
+        )
+        .normalize();
     
-        // Global up vector remains the same
-        let up = Vector3::unit_y();
+        // Up vector perpendicular to forward and right
+        let up = right.cross(forward).normalize();
     
         // Combine movements
-        let direction =
-            (forward * (self.amount_forward - self.amount_backward)
-            + right * (self.amount_right - self.amount_left)
-            + up * (self.amount_up - self.amount_down))
-            .normalize();
+        let mut direction = Vector3::zero();
+        
+        // Apply forward/backward movement
+        if self.amount_forward > 0.0 || self.amount_backward > 0.0 {
+            direction += forward * (self.amount_forward - self.amount_backward);
+        }
+        
+        // Apply left/right movement (strafe)
+        if self.amount_right > 0.0 || self.amount_left > 0.0 {
+            direction += right * (self.amount_right - self.amount_left);
+        }
+        
+        // Apply up/down movement
+        if self.amount_up > 0.0 || self.amount_down > 0.0 {
+            direction += up * (self.amount_up - self.amount_down);
+        }
+        
+        // Normalize direction if there's any movement
+        if direction.magnitude2() > 0.0 {
+            direction = direction.normalize();
+        }
     
         // Apply combined directional movement
         camera.position += direction * self.speed * dt;
