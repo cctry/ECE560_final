@@ -8,6 +8,7 @@ use winit::{
     window::{Window, WindowBuilder},
 };
 mod camera;
+mod texture;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -116,6 +117,7 @@ struct State<'a> {
     mouse_pressed: bool,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
+    depth_texture: texture::Texture,
 }
 
 impl<'a> State<'a> {
@@ -277,7 +279,13 @@ impl<'a> State<'a> {
                 // Requires Features::CONSERVATIVE_RASTERIZATION
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less, // 1.
+                stencil: wgpu::StencilState::default(),     // 2.
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -334,7 +342,13 @@ impl<'a> State<'a> {
                 unclipped_depth: false,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: texture::Texture::DEPTH_FORMAT,
+                depth_write_enabled: false, // Don't write to depth buffer
+                depth_compare: wgpu::CompareFunction::Always, // Always pass depth test
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -343,6 +357,9 @@ impl<'a> State<'a> {
             multiview: None,
             cache: None,
         });
+
+        let depth_texture =
+            texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
         Self {
             surface,
@@ -363,6 +380,7 @@ impl<'a> State<'a> {
             projection,
             camera_controller: camera_controller,
             mouse_pressed: false,
+            depth_texture,
         }
     }
 
@@ -381,6 +399,8 @@ impl<'a> State<'a> {
             self.projection.resize(clamped_width, clamped_height);
             log::info!("Resized to {:?}", self.size);
             self.surface.configure(&self.device, &self.config);
+            self.depth_texture =
+                texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
         }
     }
 
@@ -448,7 +468,14 @@ impl<'a> State<'a> {
                         },
                     }),
                 ],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: wgpu::StoreOp::Store,
+                    }),
+                    stencil_ops: None,
+                }),
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
