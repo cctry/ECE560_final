@@ -41,8 +41,13 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin
           git checkout -b publish origin/publish || git checkout --orphan publish
-          rm -rf *
-          cp -r pkg/* .
+          
+          # Remove .gitignore in the publish branch
+          if [ -f .gitignore ]; then
+            rm .gitignore
+          fi
+          
+          # Commit and push changes
           git add .
           git commit -m "Auto-build: Update WASM files"
           git push --force origin publish
