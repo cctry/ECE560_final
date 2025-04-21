@@ -51,11 +51,13 @@ jobs:
           if [ -f .gitignore ]; then
             rm .gitignore
           fi
+
+          # delete target
+          rm -rf target
           
           # Commit and push changes
           git add .
           git add -f pkg/
-          rm -rf target
           git commit -m "Auto-build: Update WASM files"
           git push --force origin publish
         env:
