@@ -7,19 +7,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Learn WGPU</title>
     <style>
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #333;
+        }
         canvas {
             background-color: black;
+            display: block;
         }
     </style>
 </head>
 
 <body id="wasm-example">
-  <script type="module">
-      import init from "./pkg/explorer.js";
-      init().then(() => {
-          console.log("WASM Loaded");
-      });
-  </script>
+    <script type="module">
+        import init from "./pkg/web_gl.js";
+        init().then(() => {
+            console.log("WASM Loaded");
+        });
+    </script>
+  <canvas id="canvas" width="800" height="600"></canvas>
 </body>
 
 </html>
