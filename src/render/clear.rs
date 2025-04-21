@@ -84,7 +84,7 @@
 // }
 
 use super::renderable::Renderable;
-use crate::context::ContextData;
+use crate::context::ContextState;
 use winit::event::WindowEvent;
 
 pub struct ClearPass {
@@ -126,11 +126,11 @@ impl Renderable for ClearPass {
         });
     }
 
-    fn input(&mut self, event: &WindowEvent, context: &ContextData) -> bool {
+    fn input(&mut self, event: &WindowEvent, context: &ContextState) -> bool {
         if let WindowEvent::CursorMoved { position, .. } = event {
             self.clear_color = wgpu::Color {
-                r: position.x as f64 / context.size().width as f64,
-                g: position.y as f64 / context.size().height as f64,
+                r: position.x as f64 / context.size.width as f64,
+                g: position.y as f64 / context.size.height as f64,
                 b: 1.0,
                 a: 1.0,
             };
@@ -138,4 +138,6 @@ impl Renderable for ClearPass {
         }
         false
     }
+
+    fn update(&mut self, _context: &mut ContextState, _queue: &wgpu::Queue) {}
 }

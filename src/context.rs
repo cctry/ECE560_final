@@ -1,15 +1,13 @@
 use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 
 use crate::render::Renderable;
-use getset::Getters;
-#[derive(Getters)]
-pub struct ContextData {
-    #[getset(get = "pub")]
-    size: winit::dpi::PhysicalSize<u32>,
+pub struct ContextState {
+    pub size: winit::dpi::PhysicalSize<u32>,
+    pub new_terrian: bool,
 }
 
 pub struct Context<'a> {
-    context_data: ContextData,
+    context_data: ContextState,
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -78,8 +76,9 @@ impl<'a> Context<'a> {
             device: device,
             queue: queue,
             config: config,
-            context_data: ContextData {
+            context_data: ContextState {
                 size: PhysicalSize::new(width, height),
+                new_terrian: true,
             },
             window,
             render_passes: Vec::new(),
@@ -115,7 +114,11 @@ impl<'a> Context<'a> {
         res
     }
 
-    pub fn update(&mut self) {}
+    pub fn update(&mut self) {
+        for pass in &mut self.render_passes {
+            pass.update(&mut self.context_data, &self.queue);
+        }
+    }
 
     pub fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
         let output = self.surface.get_current_texture()?;

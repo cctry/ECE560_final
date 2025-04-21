@@ -1,4 +1,3 @@
-use render::ClearPass;
 use wasm_bindgen::prelude::*;
 use winit::{
     error::EventLoopError,
@@ -28,8 +27,11 @@ fn create_window(title: &str) -> Result<(Window, EventLoop<()>), EventLoopError>
     Ok((window, event_loop))
 }
 
+#[allow(unused)]
 fn register_passes(context: &mut Context) {
-    context.add_render_pass::<ClearPass>();
+    use render::{ClearPass, PerlinPass};
+    // context.add_render_pass::<ClearPass>();
+    context.add_render_pass::<PerlinPass>();
 }
 
 #[wasm_bindgen(start)]
