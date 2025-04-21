@@ -1,2 +1,3 @@
 /target
 /pkg
+!/pkg/web_gl.js
