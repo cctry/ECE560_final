@@ -54,6 +54,8 @@ jobs:
           
           # Commit and push changes
           git add .
+          git add -f pkg/
+          rm -rf target
           git commit -m "Auto-build: Update WASM files"
           git push --force origin publish
         env:
