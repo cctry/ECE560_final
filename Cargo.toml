@@ -1,34 +1,24 @@
 [package]
-name = "explorer"
+name = "web_gl"
 version = "0.1.0"
-edition = "2021"
-
-[build]
-rustflags = ["-C", "link-arg=-fuse-ld=mold"]
+edition = "2024"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-cfg-if = "1"
 winit = { version = "0.29", features = ["rwh_05"] }
 env_logger = "0.10"
+getset = "0.1"
 log = "0.4"
-wgpu = "24.0"
-pollster = "0.3"
-bytemuck = { version = "1.16", features = [ "derive" ] }
-cgmath = "0.18"
-instant = "0.1"
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
 console_error_panic_hook = "0.1.6"
 console_log = "1.0"
 wgpu = { version = "24.0", features = ["webgl"]}
 wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4.30"
-web-sys = { version = "0.3.69", features = [
+web-sys = { version = "0.3", features = [
     "Document",
     "Window",
     "Element",
 ]}
-instant = { version = "0.1", features = [ "wasm-bindgen" ] }
+
