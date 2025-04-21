@@ -1,5 +1,8 @@
 name: Rust
 
+permissions:
+  contents: write
+
 on:
   push:
     branches: [ "master" ]
@@ -25,6 +28,8 @@ jobs:
         with:
           toolchain: stable
           target: wasm32-unknown-unknown
+      
+      - uses: Swatinem/rust-cache@v2
 
       # Install wasm-pack
       - name: Install wasm-pack
