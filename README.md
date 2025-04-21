@@ -4,6 +4,7 @@
 ```bash
 git clone https://github.com/cctry/ECE560_final.git
 cd ECE560_final
+git checkout publish
 ```
 2. Launch an HTTP server
 ```bash
