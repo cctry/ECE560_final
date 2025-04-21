@@ -1,0 +1,50 @@
+name: Rust
+
+on:
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Install Rust
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: wasm32-unknown-unknown
+
+      # Install wasm-pack
+      - name: Install wasm-pack
+        run: cargo install wasm-pack
+
+      # Build the project
+      - name: Build with wasm-pack
+        run: wasm-pack build --target web
+
+      # Deploy to the 'publish' branch
+      - name: Deploy to publish branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin
+          git checkout -b publish origin/publish || git checkout --orphan publish
+          rm -rf *
+          cp -r pkg/* .
+          git add .
+          git commit -m "Auto-build: Update WASM files"
+          git push --force origin publish
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
