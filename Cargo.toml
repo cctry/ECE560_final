@@ -3,6 +3,12 @@ name = "web_gl"
 version = "0.1.0"
 edition = "2024"
 
+[build]
+rustflags = ["-C", "target-feature=+simd128"]
+
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "target-feature=+simd128"]
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -21,3 +27,4 @@ web-sys = { version = "0.3", features = [
     "Element",
 ]}
 bytemuck = { version = "1.16", features = [ "derive" ] }
+noise = "0.9"

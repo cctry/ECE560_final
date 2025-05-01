@@ -39,7 +39,7 @@ fn vs_main(@builtin(vertex_index) vertex_index: u32) -> VertexOutput {
 }
 
 fn terrain_colormap(x: f32) -> vec3<f32> {
-    let x_clamped = clamp(x, 0.0, 1.0);
+    let x_clamped = x; //clamp(x, 0.0, 1.0);
 
     if (x_clamped <= 0.15) {
         let t = x_clamped / 0.15;
