@@ -52,8 +52,8 @@ jobs:
             rm .gitignore
           fi
 
-          # delete target
-          rm -rf target
+          # delete dirs
+          rm -rf target .vscode .github
           
           # Commit and push changes
           git add .
