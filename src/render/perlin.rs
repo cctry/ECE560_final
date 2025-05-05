@@ -48,14 +48,24 @@ fn tessellation(height_map: &Vec<f32>) -> (Vec<f32>, Vec<u32>) {
     // indices generation
     let mut indices = Vec::with_capacity((SIZE - 1) * SIZE * 2 + SIZE - 2);
     for i in 0..SIZE - 1 {
-        for j in 0..SIZE {
-            indices.push((i * SIZE + j) as u32);
-            indices.push(((i + 1) * SIZE + j) as u32);
+        if i % 2 == 0 {
+            // Left to right
+            for j in 0..SIZE {
+                indices.push((i * SIZE + j) as u32);
+                indices.push(((i + 1) * SIZE + j) as u32);
+            }
+        } else {
+            // Right to left
+            for j in (0..SIZE).rev() {
+                indices.push(((i + 1) * SIZE + j) as u32);
+                indices.push((i * SIZE + j) as u32);
+            }
         }
         if i < SIZE - 2 {
-            indices.push(u32::MAX);
+            indices.push(u32::MAX); // primitive restart
         }
     }
+
     (vertices, indices)
 }
 
@@ -166,7 +176,7 @@ impl Renderable for PerlinPass {
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
                 strip_index_format: Some(wgpu::IndexFormat::Uint32),
-                front_face: wgpu::FrontFace::Ccw,
+                front_face: wgpu::FrontFace::Cw,
                 cull_mode: Some(wgpu::Face::Back),
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
@@ -221,11 +231,12 @@ impl Renderable for PerlinPass {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 view_formats: &[],
             });
-            self.depth_texture_view = self.depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+            self.depth_texture_view = self
+                .depth_texture
+                .create_view(&wgpu::TextureViewDescriptor::default());
             self.texture_size = None; // Reset after resizing
         }
-        
-        
+
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Perlin Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
