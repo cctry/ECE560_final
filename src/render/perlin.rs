@@ -49,20 +49,26 @@ fn tessellation(height_map: &Vec<f32>) -> (Vec<f32>, Vec<u32>) {
     let mut indices = Vec::with_capacity((SIZE - 1) * SIZE * 2 + SIZE - 2);
     for i in 0..SIZE - 1 {
         if i % 2 == 0 {
-            // Left to right
+            // Even bottom→top
             for j in 0..SIZE {
-                indices.push((i * SIZE + j) as u32);
+                // bottom 
                 indices.push(((i + 1) * SIZE + j) as u32);
+                // top 
+                indices.push((i * SIZE + j) as u32);
             }
         } else {
-            // Right to left
+            // Odd top→bottom
             for j in (0..SIZE).rev() {
-                indices.push(((i + 1) * SIZE + j) as u32);
+                // top 
                 indices.push((i * SIZE + j) as u32);
+                // bottom 
+                indices.push(((i + 1) * SIZE + j) as u32);
             }
         }
+    
+        // primitive‑restart
         if i < SIZE - 2 {
-            indices.push(u32::MAX); // primitive restart
+            indices.push(u32::MAX);
         }
     }
 
@@ -176,7 +182,7 @@ impl Renderable for PerlinPass {
             primitive: wgpu::PrimitiveState {
                 topology: wgpu::PrimitiveTopology::TriangleStrip,
                 strip_index_format: Some(wgpu::IndexFormat::Uint32),
-                front_face: wgpu::FrontFace::Cw,
+                front_face: wgpu::FrontFace::Ccw,
                 cull_mode: Some(wgpu::Face::Back),
                 unclipped_depth: false,
                 polygon_mode: wgpu::PolygonMode::Fill,
