@@ -83,7 +83,7 @@
 //     }
 // }
 
-use super::renderable::Renderable;
+use super::{Camera, renderable::Renderable};
 use crate::context::ContextState;
 use winit::event::WindowEvent;
 
@@ -92,7 +92,7 @@ pub struct ClearPass {
 }
 
 impl Renderable for ClearPass {
-    fn new(_device: &wgpu::Device, _config: &wgpu::SurfaceConfiguration) -> Self {
+    fn new(_device: &wgpu::Device, _config: &wgpu::SurfaceConfiguration, _camera: &Camera) -> Self {
         Self {
             clear_color: wgpu::Color {
                 r: 0.1,
@@ -109,6 +109,7 @@ impl Renderable for ClearPass {
         view: &wgpu::TextureView,
         _device: &wgpu::Device,
         _queue: &wgpu::Queue,
+        _camera: &Camera,
     ) {
         let _render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Render Pass"),

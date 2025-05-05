@@ -1,6 +1,8 @@
 use crate::context::ContextState;
 use winit::event::WindowEvent;
 
+use super::Camera;
+
 pub trait Renderable {
     fn render(
         &mut self,
@@ -8,13 +10,14 @@ pub trait Renderable {
         view: &wgpu::TextureView,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
+        camera: &Camera
     );
 
-    fn input(&mut self, event: &WindowEvent, context: &ContextState)-> bool;
+    fn input(&mut self, event: &WindowEvent, context: &ContextState) -> bool;
 
     fn update(&mut self, context: &mut ContextState, queue: &wgpu::Queue);
 
-    fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration) -> Self
+    fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, camera: &Camera) -> Self
     where
         Self: Sized;
 }

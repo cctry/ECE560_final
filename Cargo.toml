@@ -3,11 +3,8 @@ name = "web_gl"
 version = "0.1.0"
 edition = "2024"
 
-[build]
-rustflags = ["-C", "target-feature=+simd128"]
-
-[target.wasm32-unknown-unknown]
-rustflags = ["-C", "target-feature=+simd128"]
+[profile.release]
+lto = "fat"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
@@ -28,3 +25,5 @@ web-sys = { version = "0.3", features = [
 ]}
 bytemuck = { version = "1.16", features = [ "derive" ] }
 noise = "0.9"
+cgmath = "0.18.0"
+instant = { version = "0.1", features = [ "wasm-bindgen" ] }

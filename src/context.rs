@@ -1,9 +1,14 @@
-use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
+use std::time::Duration;
 
+use crate::render::Camera;
 use crate::render::Renderable;
+use winit::event::ElementState;
+use winit::event::KeyEvent;
+use winit::keyboard::PhysicalKey;
+use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 pub struct ContextState {
     pub size: winit::dpi::PhysicalSize<u32>,
-    pub new_terrian: bool,
+    pub new_terrain: bool,
 }
 
 pub struct Context<'a> {
@@ -14,6 +19,7 @@ pub struct Context<'a> {
     config: wgpu::SurfaceConfiguration,
     window: &'a Window,
     render_passes: Vec<Box<dyn Renderable>>,
+    pub camera: Camera,
 }
 
 impl<'a> Context<'a> {
@@ -70,7 +76,7 @@ impl<'a> Context<'a> {
             view_formats: vec![],
             desired_maximum_frame_latency: 2,
         };
-
+        let camera = Camera::new(&device, config.width, config.height);
         Context {
             surface: surface,
             device: device,
@@ -78,10 +84,11 @@ impl<'a> Context<'a> {
             config: config,
             context_data: ContextState {
                 size: PhysicalSize::new(width, height),
-                new_terrian: true,
+                new_terrain: true,
             },
             window,
             render_passes: Vec::new(),
+            camera,
         }
     }
 
@@ -95,26 +102,45 @@ impl<'a> Context<'a> {
             None => *self.size(),
         };
 
-        size.width = size.width.min(800);
-        size.height = size.height.min(600);
+        size.width = size.width.min(1280);
+        size.height = size.height.min(720);
         if size.width > 0 && size.height > 0 {
             *self.size() = size;
             self.config.width = size.width;
             self.config.height = size.height;
             self.surface.configure(&self.device, &self.config);
+            self.camera.resize(size.width, size.height);
         }
         log::info!("Surface resize to {0:?}", self.size());
     }
 
     pub fn input(&mut self, event: &WindowEvent) -> bool {
-        let mut res = false;
+        let mut res = match event {
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        state,
+                        physical_key: PhysicalKey::Code(code),
+                        ..
+                    },
+                ..
+            } => {
+                if *state == ElementState::Pressed {
+                    self.camera.process_key(code)
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
         for pass in &mut self.render_passes {
             res |= pass.input(event, &self.context_data);
         }
         res
     }
 
-    pub fn update(&mut self) {
+    pub fn update(&mut self, dt: &Duration) {
+        self.camera.update(dt, &self.queue);
         for pass in &mut self.render_passes {
             pass.update(&mut self.context_data, &self.queue);
         }
@@ -133,7 +159,7 @@ impl<'a> Context<'a> {
             });
 
         for pass in &mut self.render_passes {
-            pass.render(&mut encoder, &view, &self.device, &self.queue);
+            pass.render(&mut encoder, &view, &self.device, &self.queue, &self.camera);
         }
 
         self.queue.submit(Some(encoder.finish()));
@@ -142,7 +168,7 @@ impl<'a> Context<'a> {
     }
 
     pub fn add_render_pass<T: Renderable + 'static>(&mut self) {
-        let pass = T::new(&self.device, &self.config);
+        let pass = T::new(&self.device, &self.config, &self.camera);
         self.render_passes.push(Box::new(pass));
     }
 

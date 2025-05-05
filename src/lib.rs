@@ -44,10 +44,17 @@ async fn run() {
     register_passes(&mut context);
 
     let mut surface_configured = false;
+    let mut last_render_time = instant::Instant::now();
 
     let _ = event_loop
         .run(move |event, control_flow| {
             match event {
+                Event::DeviceEvent {
+                    event: DeviceEvent::MouseMotion { delta },
+                    ..
+                } => { // This is bad
+                    context.camera.process_mouse((delta.0 as f32, delta.1 as f32).into());
+                }
                 Event::WindowEvent {
                     ref event,
                     window_id,
@@ -78,7 +85,13 @@ async fn run() {
                                     return;
                                 }
 
-                                context.update();
+                                let now = instant::Instant::now();
+                                let dt = now - last_render_time;
+                                last_render_time = now;
+
+                                log::info!("FPS: {:.2}", 1.0 / dt.as_secs_f32());
+
+                                context.update(&dt);
                                 match context.render() {
                                     Ok(_) => {}
                                     // Reconfigure the surface if it's lost or outdated
