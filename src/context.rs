@@ -9,6 +9,7 @@ use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
 pub struct ContextState {
     pub size: winit::dpi::PhysicalSize<u32>,
     pub new_terrain: bool,
+    pub cursor_captured: bool,
 }
 
 pub struct Context<'a> {
@@ -85,6 +86,7 @@ impl<'a> Context<'a> {
             context_data: ContextState {
                 size: PhysicalSize::new(width, height),
                 new_terrain: true,
+                cursor_captured: false,
             },
             window,
             render_passes: Vec::new(),
@@ -119,18 +121,12 @@ impl<'a> Context<'a> {
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
-                        state,
+                        state: ElementState::Pressed,
                         physical_key: PhysicalKey::Code(code),
                         ..
                     },
                 ..
-            } => {
-                if *state == ElementState::Pressed {
-                    self.camera.process_key(code)
-                } else {
-                    false
-                }
-            }
+            } => self.camera.process_key(code),
             _ => false,
         };
         for pass in &mut self.render_passes {
@@ -174,5 +170,30 @@ impl<'a> Context<'a> {
 
     pub fn size(&mut self) -> &mut PhysicalSize<u32> {
         &mut self.context_data.size
+    }
+
+    pub fn toggle_cursor_capture(&mut self) -> bool {
+        self.context_data.cursor_captured = !self.context_data.cursor_captured;
+
+        // Set cursor grab mode
+        if let Err(e) = self
+            .window
+            .set_cursor_grab(if self.context_data.cursor_captured {
+                winit::window::CursorGrabMode::Confined
+            } else {
+                winit::window::CursorGrabMode::None
+            })
+        {
+            log::warn!("Failed to set cursor grab: {:?}", e);
+        }
+
+        // Set cursor visibility
+        self.window
+            .set_cursor_visible(!self.context_data.cursor_captured);
+        true
+    }
+
+    pub fn is_cursor_captured(&self) -> bool {
+        self.context_data.cursor_captured
     }
 }

@@ -52,8 +52,12 @@ async fn run() {
                 Event::DeviceEvent {
                     event: DeviceEvent::MouseMotion { delta },
                     ..
-                } => { // This is bad
-                    context.camera.process_mouse((delta.0 as f32, delta.1 as f32).into());
+                } => {
+                    if context.is_cursor_captured() {
+                        context
+                            .camera
+                            .process_mouse((delta.0 as f32, delta.1 as f32).into());
+                    }
                 }
                 Event::WindowEvent {
                     ref event,
@@ -62,8 +66,11 @@ async fn run() {
                     if !context.input(event) {
                         // If the event was not handled, we can pass it to the window
                         match event {
-                            WindowEvent::CloseRequested
-                            | WindowEvent::KeyboardInput {
+                            WindowEvent::CloseRequested => {
+                                log::info!("Close requested");
+                                control_flow.exit();
+                            }
+                            WindowEvent::KeyboardInput {
                                 event:
                                     KeyEvent {
                                         state: ElementState::Pressed,
@@ -71,7 +78,18 @@ async fn run() {
                                         ..
                                     },
                                 ..
-                            } => control_flow.exit(),
+                            } => {
+                                if context.is_cursor_captured() {
+                                    context.toggle_cursor_capture();
+                                }
+                            }
+                            WindowEvent::MouseInput {
+                                state: ElementState::Pressed,
+                                button: MouseButton::Left,
+                                ..
+                            } => {
+                                context.toggle_cursor_capture(); // click to switch
+                            }
                             WindowEvent::Resized(physical_size) => {
                                 log::info!("physical_size: {physical_size:?}");
                                 surface_configured = true;

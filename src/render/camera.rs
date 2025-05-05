@@ -14,7 +14,7 @@ const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 const YAW: Deg<f32> = Deg(-90.0); // 0 --> positive x-axis
 const PITCH: Deg<f32> = Deg(0.0); // 90 --> positive y-axis
 
-const SPEED: f32 = 5.5;
+const SPEED: f32 = 8.0;
 const SENSITIVITY: f32 = 1.0;
 const ZOOM: Deg<f32> = Deg(45.0);
 const ZNEAR: f32 = 0.1;
