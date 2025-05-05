@@ -5,7 +5,7 @@ use crate::context::ContextState;
 use noise::{Fbm, MultiFractal, NoiseFn, Perlin};
 use web_sys::js_sys::Math;
 use wgpu::BufferUsages;
-use winit::event::WindowEvent;
+use winit::{dpi::PhysicalSize, event::WindowEvent};
 
 const SIZE: usize = 512;
 
@@ -61,9 +61,12 @@ fn tessellation(height_map: &Vec<f32>) -> (Vec<f32>, Vec<u32>) {
 
 pub struct PerlinPass {
     new_terrain: bool,
+    texture_size: Option<PhysicalSize<u32>>,
     render_pipeline: wgpu::RenderPipeline,
     terrain_index_buffer: wgpu::Buffer,
     terrain_vertex_buffer: wgpu::Buffer,
+    depth_texture: wgpu::Texture,
+    depth_texture_view: wgpu::TextureView,
 }
 
 impl Renderable for PerlinPass {
@@ -88,6 +91,12 @@ impl Renderable for PerlinPass {
             );
         }
         context.new_terrain = false;
+        // check if resize is needed
+        let current_size = self.depth_texture.size();
+        let new_size = context.size;
+        if current_size.width != new_size.width || current_size.height != new_size.height {
+            self.texture_size = Some(new_size);
+        }
     }
 
     fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, camera: &Camera) -> Self {
@@ -104,6 +113,22 @@ impl Renderable for PerlinPass {
             usage: BufferUsages::COPY_DST | BufferUsages::VERTEX,
             mapped_at_creation: false,
         });
+
+        let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("Perlin Depth Texture"),
+            size: wgpu::Extent3d {
+                width: config.width,
+                height: config.height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: wgpu::TextureFormat::Depth32Float,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            view_formats: &[],
+        });
+        let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("terrain.wgsl"));
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -147,7 +172,13 @@ impl Renderable for PerlinPass {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: Some(wgpu::DepthStencilState {
+                format: wgpu::TextureFormat::Depth32Float,
+                depth_write_enabled: true,
+                depth_compare: wgpu::CompareFunction::Less,
+                stencil: wgpu::StencilState::default(),
+                bias: wgpu::DepthBiasState::default(),
+            }),
             multisample: wgpu::MultisampleState {
                 count: 1,
                 mask: !0,
@@ -158,9 +189,12 @@ impl Renderable for PerlinPass {
         });
         Self {
             new_terrain: true,
+            texture_size: None,
             render_pipeline,
             terrain_index_buffer,
             terrain_vertex_buffer,
+            depth_texture,
+            depth_texture_view,
         }
     }
 
@@ -172,6 +206,26 @@ impl Renderable for PerlinPass {
         _queue: &wgpu::Queue,
         camera: &Camera,
     ) {
+        if let Some(size) = self.texture_size {
+            self.depth_texture = _device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("Perlin Depth Texture"),
+                size: wgpu::Extent3d {
+                    width: size.width,
+                    height: size.height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Depth32Float,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            });
+            self.depth_texture_view = self.depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
+            self.texture_size = None; // Reset after resizing
+        }
+        
+        
         let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("Perlin Render Pass"),
             color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -182,7 +236,14 @@ impl Renderable for PerlinPass {
                     store: wgpu::StoreOp::Store,
                 },
             })],
-            depth_stencil_attachment: None,
+            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &self.depth_texture_view,
+                depth_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(1.0),
+                    store: wgpu::StoreOp::Store,
+                }),
+                stencil_ops: None,
+            }),
             timestamp_writes: None,
             occlusion_query_set: None,
         });
