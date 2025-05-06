@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use crate::render::Camera;
 use crate::render::Renderable;
-use winit::event::ElementState;
 use winit::event::KeyEvent;
 use winit::keyboard::PhysicalKey;
 use winit::{dpi::PhysicalSize, event::WindowEvent, window::Window};
@@ -145,12 +144,12 @@ impl<'a> Context<'a> {
             WindowEvent::KeyboardInput {
                 event:
                     KeyEvent {
-                        state: ElementState::Pressed,
+                        state,
                         physical_key: PhysicalKey::Code(code),
                         ..
                     },
                 ..
-            } => self.camera.process_key(code),
+            } => self.camera.process_key(state, code),
             _ => false,
         };
         for pass in &mut self.pipelines {

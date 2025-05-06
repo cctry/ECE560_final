@@ -1,6 +1,7 @@
 use cgmath::*;
 use std::f32::consts::FRAC_PI_2;
 use std::time::Duration;
+use winit::event::ElementState;
 use winit::keyboard::KeyCode;
 
 #[rustfmt::skip]
@@ -134,7 +135,7 @@ impl Camera {
         let proj = perspective(self.fovy, self.aspect, self.znear, self.zfar);
 
         self.uniform.view_position = self.eye.to_homogeneous().into();
-        self.uniform.view_proj = (OPENGL_TO_WGPU_MATRIX * proj * view).into();        
+        self.uniform.view_proj = (OPENGL_TO_WGPU_MATRIX * proj * view).into();
     }
 
     // called when the surface is resized
@@ -143,22 +144,27 @@ impl Camera {
     }
 
     // called for input events
-    pub fn process_key(&mut self, key: &KeyCode) -> bool {
+    pub fn process_key(&mut self, state: &ElementState, key: &KeyCode) -> bool {
+        let pressed = if *state == ElementState::Pressed {
+            1.0
+        } else {
+            0.0
+        };
         match key {
             KeyCode::KeyW => {
-                self.movement.x += 1.0;
+                self.movement.x = pressed;
                 true
             }
             KeyCode::KeyS => {
-                self.movement.y += 1.0;
+                self.movement.y = pressed;
                 true
             }
             KeyCode::KeyA => {
-                self.movement.z += 1.0;
+                self.movement.z = pressed;
                 true
             }
             KeyCode::KeyD => {
-                self.movement.w += 1.0;
+                self.movement.w = pressed;
                 true
             }
             _ => false,
@@ -182,15 +188,9 @@ impl Camera {
             - front * velocity * self.movement.y
             - right * velocity * self.movement.z
             + right * velocity * self.movement.w;
-        self.movement = Vector4::zero();
         self.rotation = Vector2::zero();
         self.update_uniform(front, up);
         // upload the uniform
-        queue.write_buffer(
-            &self.buffer,
-            0,
-            bytemuck::cast_slice(&[self.uniform]),
-        );
+        queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
     }
 }
-
