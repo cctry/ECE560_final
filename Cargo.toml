@@ -1,5 +1,5 @@
 [package]
-name = "web_gl"
+name = "terrain-wgpu"
 version = "0.1.0"
 edition = "2024"
 
