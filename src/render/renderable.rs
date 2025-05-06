@@ -6,10 +6,7 @@ use super::Camera;
 pub trait Renderable {
     fn render(
         &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        device: &wgpu::Device,
-        queue: &wgpu::Queue,
+        pass: &mut wgpu::RenderPass,
         camera: &Camera
     );
 

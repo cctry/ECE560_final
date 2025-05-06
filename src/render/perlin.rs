@@ -5,7 +5,7 @@ use crate::context::ContextState;
 use noise::{Fbm, MultiFractal, NoiseFn, Perlin};
 use web_sys::js_sys::Math;
 use wgpu::BufferUsages;
-use winit::{dpi::PhysicalSize, event::WindowEvent};
+use winit::event::WindowEvent;
 
 const SIZE: usize = 512;
 
@@ -75,36 +75,11 @@ fn tessellation(height_map: &Vec<f32>) -> (Vec<f32>, Vec<u32>) {
     (vertices, indices)
 }
 
-fn create_depth_texture(
-    device: &wgpu::Device,
-    width: u32,
-    height: u32,
-) -> (wgpu::Texture, wgpu::TextureView) {
-    let depth_texture = device.create_texture(&wgpu::TextureDescriptor {
-        label: Some("Perlin Depth Texture"),
-        size: wgpu::Extent3d {
-            width: width,
-            height: height,
-            depth_or_array_layers: 1,
-        },
-        mip_level_count: 1,
-        sample_count: 1,
-        dimension: wgpu::TextureDimension::D2,
-        format: wgpu::TextureFormat::Depth32Float,
-        usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-        view_formats: &[],
-    });
-    let depth_texture_view = depth_texture.create_view(&wgpu::TextureViewDescriptor::default());
-    (depth_texture, depth_texture_view)
-}
 pub struct PerlinPass {
     new_terrain: bool,
-    texture_size: Option<PhysicalSize<u32>>,
     render_pipeline: wgpu::RenderPipeline,
     terrain_index_buffer: wgpu::Buffer,
     terrain_vertex_buffer: wgpu::Buffer,
-    depth_texture: wgpu::Texture,
-    depth_texture_view: wgpu::TextureView,
 }
 
 impl Renderable for PerlinPass {
@@ -129,12 +104,6 @@ impl Renderable for PerlinPass {
             );
         }
         context.new_terrain = false;
-        // check if resize is needed
-        let current_size = self.depth_texture.size();
-        let new_size = context.size;
-        if current_size.width != new_size.width || current_size.height != new_size.height {
-            self.texture_size = Some(new_size);
-        }
     }
 
     fn new(device: &wgpu::Device, config: &wgpu::SurfaceConfiguration, camera: &Camera) -> Self {
@@ -151,9 +120,6 @@ impl Renderable for PerlinPass {
             usage: BufferUsages::COPY_DST | BufferUsages::VERTEX,
             mapped_at_creation: false,
         });
-
-        let (depth_texture, depth_texture_view) =
-            create_depth_texture(&device, config.width, config.height);
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("terrain.wgsl"));
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -214,58 +180,21 @@ impl Renderable for PerlinPass {
         });
         Self {
             new_terrain: true,
-            texture_size: None,
             render_pipeline,
             terrain_index_buffer,
             terrain_vertex_buffer,
-            depth_texture,
-            depth_texture_view,
         }
     }
 
-    fn render(
-        &mut self,
-        encoder: &mut wgpu::CommandEncoder,
-        view: &wgpu::TextureView,
-        _device: &wgpu::Device,
-        _queue: &wgpu::Queue,
-        camera: &Camera,
-    ) {
-        if let Some(size) = self.texture_size {
-            (self.depth_texture, self.depth_texture_view) =
-                create_depth_texture(&_device, size.width, size.height);
-            self.texture_size = None; // Reset after resizing
-        }
-
-        let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some("Perlin Render Pass"),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: &view,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                view: &self.depth_texture_view,
-                depth_ops: Some(wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(1.0),
-                    store: wgpu::StoreOp::Store,
-                }),
-                stencil_ops: None,
-            }),
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-        render_pass.set_pipeline(&self.render_pipeline);
-        render_pass.set_bind_group(0, &camera.bind_group, &[]);
-        render_pass.set_vertex_buffer(0, self.terrain_vertex_buffer.slice(..));
-        render_pass.set_index_buffer(
+    fn render(&mut self, pass: &mut wgpu::RenderPass, camera: &Camera) {
+        pass.set_pipeline(&self.render_pipeline);
+        pass.set_bind_group(0, &camera.bind_group, &[]);
+        pass.set_vertex_buffer(0, self.terrain_vertex_buffer.slice(..));
+        pass.set_index_buffer(
             self.terrain_index_buffer.slice(..),
             wgpu::IndexFormat::Uint32,
         );
         let index_count = (SIZE - 1) * SIZE * 2 + (SIZE - 2); // Or store this when generating indices
-        render_pass.draw_indexed(0..index_count as u32, 0, 0..1);
+        pass.draw_indexed(0..index_count as u32, 0, 0..1);
     }
 }

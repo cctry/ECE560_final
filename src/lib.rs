@@ -29,8 +29,9 @@ fn create_window(title: &str) -> Result<(Window, EventLoop<()>), EventLoopError>
 
 #[allow(unused)]
 fn register_passes(context: &mut Context) {
-    use render::{ClearPass, PerlinPass};
-    // context.add_render_pass::<ClearPass>();
+    use render::PerlinPass;
+    use render::SkyPass;
+    context.add_render_pass::<SkyPass>();
     context.add_render_pass::<PerlinPass>();
 }
 
