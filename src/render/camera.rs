@@ -28,6 +28,8 @@ const START_POSITION: Point3<f32> = Point3::new(0.0, 50.0, 0.0);
 struct CameraUniform {
     pub view_position: [f32; 4],
     pub view_proj: [[f32; 4]; 4],
+    pub time: f32,
+    _padding: [f32; 3],
 }
 
 impl CameraUniform {
@@ -35,6 +37,8 @@ impl CameraUniform {
         Self {
             view_position: [0.0; 4],
             view_proj: cgmath::Matrix4::identity().into(),
+            time: 0.0,
+            _padding: Default::default(),
         }
     }
 }
@@ -190,6 +194,7 @@ impl Camera {
             + right * velocity * self.movement.w;
         self.rotation = Vector2::zero();
         self.update_uniform(front, up);
+        self.uniform.time += dt;
         // upload the uniform
         queue.write_buffer(&self.buffer, 0, bytemuck::cast_slice(&[self.uniform]));
     }
