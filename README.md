@@ -6,6 +6,9 @@
 ```bash
 git clone https://github.com/cctry/ECE560_final.git
 cd ECE560_final
+```
+2. Switch to the `publish` branch
+```bash
 git checkout publish
 ```
 2. Launch an HTTP server
