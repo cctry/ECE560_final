@@ -44,24 +44,24 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git fetch origin
-          git checkout -b publish origin/publish || git checkout --orphan publish
-          
-          # Synchronize with master branch
-          git merge origin/master --no-edit || git rebase origin/master
+
+          # Create a new orphan branch (no history) for publishing
+          git checkout --orphan temp_publish
 
           # Remove .gitignore in the publish branch
           if [ -f .gitignore ]; then
             rm .gitignore
           fi
 
-          # delete dirs
-          rm -rf target .vscode .github
+          # Delete everything expect the pkg directory, index.html, and README.md
+          find . -maxdepth 1 ! -name 'pkg' ! -name 'index.html' ! -name 'README.md' ! -name '.git' -exec rm -rf {} +
           
-          # Commit and push changes
+          # Commit changes
           git add .
           git add -f pkg/
           git commit -m "Auto-build: Update WASM files"
-          git push --force origin publish
+
+          # Force push to publish branch
+          git push --force origin temp_publish:publish
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
