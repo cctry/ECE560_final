@@ -8,21 +8,26 @@ use wgpu::BufferUsages;
 use winit::event::WindowEvent;
 
 const SIZE: usize = 512;
+const SCALE: f32 = 32.0;
+const SHIFT: f32 = 16.0;
+const LACUNARITY: f64 = 2.0;
+const PERSISTENCE: f64 = 0.5;
+const OCTAVES: usize = 6;
+const NOISE_SCALE: f64 = 10.0;
 
 fn generate_heightmap() -> Vec<f32> {
     let seed = Math::random() as u32;
     let fbm: Fbm<Perlin> = Fbm::new(seed)
-        .set_lacunarity(2.0)
-        .set_persistence(0.5)
-        .set_octaves(6);
+        .set_lacunarity(LACUNARITY)
+        .set_persistence(PERSISTENCE)
+        .set_octaves(OCTAVES);
 
-    let scale = 10.0; // Adjust scale to control the frequency of the noise
     let mut heightmap = vec![0.0; SIZE * SIZE];
     for z in 0..SIZE {
         for x in 0..SIZE {
             let val = fbm.get([
-                x as f64 * scale / SIZE as f64,
-                z as f64 * scale / SIZE as f64,
+                x as f64 * NOISE_SCALE / SIZE as f64,
+                z as f64 * NOISE_SCALE / SIZE as f64,
             ]) as f32;
             let normalized = (val + 1.0) / 2.0; // Map from [-1, 1] to [0, 1]
             heightmap[z * SIZE + x] = normalized;
@@ -34,14 +39,12 @@ fn generate_heightmap() -> Vec<f32> {
 
 fn tessellation(height_map: &Vec<f32>) -> (Vec<f32>, Vec<u32>) {
     // vertex generation
-    let scale = 32.0;
-    let shift = 16.0;
     let mut vertices = Vec::with_capacity(SIZE * SIZE * 3);
     for i in 0..SIZE {
         for j in 0..SIZE {
             let h = height_map[i * SIZE + j];
             vertices.push(-(SIZE as f32) / 2.0 + i as f32); // v.x
-            vertices.push(h * scale - shift); // v.y
+            vertices.push(h * SCALE - SHIFT); // v.y
             vertices.push(-(SIZE as f32) / 2.0 + j as f32); // v.z
         }
     }
