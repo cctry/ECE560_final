@@ -9,7 +9,7 @@ use winit::event::WindowEvent;
 
 const SIZE: usize = 512;
 const SCALE: f32 = 32.0;
-const SHIFT: f32 = 16.0;
+const SHIFT: f32 = 12.0;
 const LACUNARITY: f64 = 2.0;
 const PERSISTENCE: f64 = 0.5;
 const OCTAVES: usize = 6;

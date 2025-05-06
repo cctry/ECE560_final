@@ -31,8 +31,10 @@ fn create_window(title: &str) -> Result<(Window, EventLoop<()>), EventLoopError>
 fn register_passes(context: &mut Context) {
     use render::PerlinPass;
     use render::SkyPass;
+    use render::WaterPass;
     context.add_render_pass::<SkyPass>();
     context.add_render_pass::<PerlinPass>();
+    context.add_render_pass::<WaterPass>();
 }
 
 #[wasm_bindgen(start)]

@@ -24,22 +24,20 @@ fn vs_main(@location(0) position: vec3<f32>) -> VertexOutput {
 }
 
 fn terrain_colormap(x: f32) -> vec3<f32> {
-    let x_clamped = x; //clamp(x, 0.0, 1.0);
-
-    if (x_clamped <= 0.15) {
-        let t = x_clamped / 0.15;
+    if (x <= 0.15) {
+        let t = x / 0.15;
         return mix(vec3<f32>(0.2, 0.2, 0.6), vec3<f32>(0.0, 0.6, 1.0), t);
-    } else if (x_clamped <= 0.25) {
-        let t = (x_clamped - 0.15) / (0.25 - 0.15);
+    } else if (x <= 0.375) {
+        let t = (x - 0.15) / (0.375 - 0.15);
         return mix(vec3<f32>(0.0, 0.6, 1.0), vec3<f32>(0.0, 0.8, 0.4), t);
-    } else if (x_clamped <= 0.50) {
-        let t = (x_clamped - 0.25) / (0.50 - 0.25);
+    } else if (x <= 0.85) {
+        let t = (x - 0.375) / (0.85 - 0.375);
         return mix(vec3<f32>(0.0, 0.8, 0.4), vec3<f32>(1.0, 1.0, 0.6), t);
-    } else if (x_clamped <= 0.75) {
-        let t = (x_clamped - 0.50) / (0.75 - 0.50);
+    } else if (x <= 0.95) {
+        let t = (x - 0.85) / (0.95 - 0.85);
         return mix(vec3<f32>(1.0, 1.0, 0.6), vec3<f32>(0.5, 0.36, 0.33), t);
     } else {
-        let t = (x_clamped - 0.75) / (1.00 - 0.75);
+        let t = (x - 0.95) / (1.00 - 0.95);
         return mix(vec3<f32>(0.5, 0.36, 0.33), vec3<f32>(1.0, 1.0, 1.0), t);
     }
 }

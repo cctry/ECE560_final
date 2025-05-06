@@ -28,9 +28,9 @@ This project builds upon foundational work in procedural terrain generation:
 - "The Synthesis and Rendering of Eroded Fractal Terrains" (Musgrave et al., 1989) introduced the combination of fractal noise with erosion simulation
 - "Terrain Generation Using Procedural Models Based on Hydrology" (Génevaux et al., 2013) demonstrated how hydraulic erosion principles can enhance terrain realism
 
-## Implementation
+## Algorithm and Theory
 
-### Terrain Generation Algorithm
+### Terrain Generation
 
 The terrain generation uses Perlin noise as its foundation, which creates coherent pseudo-random values through the following process:
 
@@ -77,7 +77,35 @@ This results in a heightmap H: ℝ² → [0,1] that is:
 - Exhibits self-similarity at different scales
 - Has natural-looking variations
 
-### Framework Architecture
+### Water Surface
+
+The water surface is generated using a combination of procedural wave patterns and dynamic surface normals for realistic rendering:
+
+1. Wave Generation:
+   The height of the water surface at any point (x, z) is calculated as:
+   
+   $h(x,z,t) = \sum_{i=1}^{3} A_i \cdot \sin(f_i \cdot (k_{xi} \cdot x + k_{zi} \cdot z) + \omega_i \cdot t)$
+   
+   where:
+   - $A_i$ are wave amplitudes (0.02, 0.015, 0.01)
+   - $f_i$ are wave frequencies (10.0, 12.0, 14.0)
+   - $k_{xi}, k_{zi}$ are directional wave numbers
+   - $\omega_i$ are angular frequencies
+   - t is time
+
+2. Dynamic Normal Calculation:
+   Surface normals are computed using partial derivatives:
+   
+   $N(x,z,t) = \text{normalize}(\vec{n})$ where $\vec{n} = (-\frac{\partial h}{\partial x}, 1.0, -\frac{\partial h}{\partial z})$
+
+3. Fresnel Effect:
+   Water reflectivity R at each point is calculated using the Fresnel equation:
+   
+   $R(\theta) = (1.0 - \cos(\theta))^4$
+   
+   where θ is the angle between the view direction and surface normal
+
+## System Implementation
 
 The project follows a layered architecture pattern with the following data flow:
 
@@ -87,15 +115,18 @@ User Input → Context Management → Scene Update → Render Pipeline
     └──────────────────── Display ────────────────┘
 
 1. User Input: Mouse/keyboard events for camera control
-2. Context: Window/device management, event processing
-3. Scene Update: Camera position, terrain generation
-4. Render Pipeline: Multiple passes (terrain, sky)
-   - Compute pass: Terrain generation
-   - Render passes: Terrain mesh and skybox
+2. Context: Device and pipeline management
+3. Scene Update:
+   - Camera: Position and orientation updates
+   - Terrain: Height generation, water simulation
+4. Render Pipeline:
+   - Height Pass: Terrain mesh rendering
+   - Water Pass: Dynamic water surface
+   - Skybox Pass: Environment rendering
 5. Display: Frame presentation and vsync
 ```
 
-The implementation follows a modular architecture with several key components:
+The implementation follows a modular architecture with three main components:
 
 1. **Context Management** (`src/context.rs`)
    - Handles WebGPU device and surface initialization
@@ -110,103 +141,102 @@ The implementation follows a modular architecture with several key components:
        camera: Camera,
    }
    ```
+   - Pipeline execution order:
+     ```rust
+     // Order-dependent rendering passes
+     height_pass.render(&mut render_pass, &camera);  
+     water_pass.render(&mut render_pass, &camera);   
+     skybox_pass.render(&mut render_pass, &camera);  
+     ```
 
-2. **Render System** (`src/render/mod.rs`)
-   - Implements multiple render passes:
-     - PerlinPass: Terrain generation and rendering
-     - SkyPass: Skybox background rendering
-   - Uses depth testing for proper 3D visualization
-   - Shader-based terrain and sky visualization
+2. **Terrain System**
+   
+   2.1. **Height Generation** (`src/render/perlin.rs`)
+   - Heightmap to mesh tessellation:
+     ```rust
+     // For an N×N heightmap, generate (N-1)×(N-1) quads
+     for z in 0..N-1 {
+         for x in 0..N-1 {
+             vertices.extend_from_slice(&[
+                 x,   heights[z][x],   z,    // Top-left
+                 x+1, heights[z][x+1], z,    // Top-right
+                 x,   heights[z+1][x], z+1,  // Bottom-left
+                 // Second triangle...
+             ]);
+         }
+     }
+     ```
+   - Counter-clockwise vertex ordering for back-face culling
+   - Normal vectors computed from cross products
+   
+   2.2. **Water Surface** (`src/render/water.rs`)
+   - Single quad mesh with dynamic displacement:
+     ```rust
+     let vertices = [
+         [-SIZE_F32, WATER_LEVEL, -SIZE_F32],
+         [ SIZE_F32, WATER_LEVEL, -SIZE_F32],
+         [ SIZE_F32, WATER_LEVEL,  SIZE_F32],
+         [-SIZE_F32, WATER_LEVEL,  SIZE_F32],
+     ];
+     ```
+   - Transparency handling:
+     ```rust
+     depth_stencil: Some(wgpu::DepthStencilState {
+         depth_write_enabled: false,
+         depth_compare: wgpu::CompareFunction::LessEqual,
+         ..Default::default()
+     })
+     ```
+   - Shader effects (`water.wgsl`):
+     - Multi-layered wave animation
+     - Dynamic normal calculation
+     - View-dependent Fresnel reflections
+     - Continuous UV coordinate flow
+   
+   2.3. **Skybox** (`src/render/sky.rs`)
+   - Inside-out cube rendering:
+     ```rust
+     vertices.extend_from_slice(&[
+         pos.x, pos.y, pos.z,    // Front face
+         pos.x, pos.y, -pos.z,   // with clockwise
+         -pos.x, pos.y, -pos.z,  // winding order
+     ]);
+     pipeline_desc.primitive.cull_mode = None;
+     ```
+   - Special considerations:
+     - Inverted winding order for internal rendering
+     - Disabled back-face culling
+     - Environment map sampling
 
 3. **Camera System** (`src/render/camera.rs`)
-   - First-person camera implementation using:
+   - First-person camera controls:
      - Position vector in world space
-     - Pitch and yaw angles for orientation
+     - Pitch and yaw for orientation
      - Perspective projection matrix
-   - Mouse look control:
-     - Yaw: Horizontal mouse movement (left/right)
-     - Pitch: Vertical mouse movement (up/down)
-     - Clamped pitch to prevent camera flipping
-   - Keyboard movement using WASD controls:
-     - Forward/backward along camera's forward vector
-     - Strafe left/right along camera's right vector
+   - Input handling:
+     - Mouse: Look direction (yaw/pitch)
+     - Keyboard: WASD movement
    - View matrix calculation:
      ```rust
      fn update_view_matrix(&mut self) {
-         // Calculate look direction from pitch/yaw
          let (sin_pitch, cos_pitch) = pitch.sin_cos();
          let (sin_yaw, cos_yaw) = yaw.sin_cos();
          
-         // Forward vector from spherical coordinates
          let forward = vec3(
              cos_pitch * cos_yaw,
              sin_pitch,
              cos_pitch * sin_yaw
          );
          
-         // Right vector from cross product with world up
          let right = forward.cross(vec3(0.0, 1.0, 0.0));
-         
-         // Create view matrix from position and vectors
-         self.view = Mat4::look_to_rh(
-             position,
-             forward,
-             right.cross(forward)
-         );
+         self.view = Mat4::look_to_rh(position, forward, right.cross(forward));
      }
-     ```
-
-4. **Terrain Mesh Generation** (`src/render/perlin.rs`)
-   - Heightmap to mesh tessellation:
-     ```rust
-     // For an N×N heightmap, generate (N-1)×(N-1) quads
-     // Each quad is split into two triangles
-     for z in 0..N-1 {
-         for x in 0..N-1 {
-             // Generate triangle vertices in counter-clockwise order
-             // for proper back-face culling
-             vertices.extend_from_slice(&[
-                 // First triangle
-                 x,   heights[z][x],   z,    // Top-left
-                 x+1, heights[z][x+1], z,    // Top-right
-                 x,   heights[z+1][x], z+1,  // Bottom-left
-                 
-                 // Second triangle
-                 x+1, heights[z][x+1],   z,    // Top-right
-                 x+1, heights[z+1][x+1], z+1,  // Bottom-right
-                 x,   heights[z+1][x],   z+1   // Bottom-left
-             ]);
-         }
-     }
-     ```
-   - Vertices ordered counter-clockwise for each triangle
-   - Enables back-face culling for rendering optimization
-   - Normal vectors computed from cross products
-
-5. **Skybox Rendering** (`src/render/sky.rs`)
-   - Cubemap-based sky rendering with special considerations:
-     - Renders skybox as inside-out cube
-     - Inverts triangle winding order to face inward
-     - Disables back-face culling for skybox pass
-   - Implementation details:
-     ```rust
-     // Skybox vertex order is clockwise (opposite of terrain)
-     // to render inside faces of the cube
-     vertices.extend_from_slice(&[
-         pos.x, pos.y, pos.z,  // Front face
-         pos.x, pos.y, -pos.z,
-         -pos.x, pos.y, -pos.z,
-         // ... remaining cube faces
-     ]);
-     
-     // Disable culling in skybox render pass
-     pipeline_desc.primitive.cull_mode = None;
      ```
 
 The system architecture emphasizes real-time performance and interactivity:
 ```
-Window Events → Context Update → Multiple Render Passes → Frame Presentation
-[Input Processing] → [Camera Update] → [Terrain/Sky Rendering] → [Display]
+Window Events → Context Update → Scene Update → Render Passes → Display
+[Input] → [Device/Pipeline] → [Camera/Terrain] → [Height/Water/Sky] → [Present]
 ```
 
 ## Conclusion
