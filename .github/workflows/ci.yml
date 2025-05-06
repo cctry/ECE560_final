@@ -53,8 +53,8 @@ jobs:
             rm .gitignore
           fi
 
-          # Delete everything expect the pkg directory, index.html, and README.md
-          find . -maxdepth 1 ! -name 'pkg' ! -name 'index.html' ! -name 'README.md' ! -name '.git' -exec rm -rf {} +
+          # Delete everything except the pkg directory, index.html, and README.md
+          find . -maxdepth 1 -mindepth 1 ! -name 'pkg' ! -name 'index.html' ! -name 'README.md' ! -name '.git' -exec rm -rf {} \;          
           
           # Commit changes
           git add .
