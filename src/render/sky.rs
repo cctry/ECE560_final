@@ -3,7 +3,6 @@ use wgpu::util::DeviceExt;
 use super::Renderable;
 
 #[rustfmt::skip]
-#[rustfmt::skip]
 const SKYBOX_VERTICES: &[[f32; 3]] = &[
     // +X (right) face, inward normal (‑1,0,0)
     [ 1.0,  1.0, -1.0], [ 1.0, -1.0, -1.0], [ 1.0, -1.0,  1.0],
