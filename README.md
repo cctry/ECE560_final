@@ -1,4 +1,6 @@
 # ECE560 final project
+## Output
+- Report.md
 ## Run the project
 1. Clone the repository
 ```bash
