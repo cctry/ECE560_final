@@ -47,6 +47,9 @@ jobs:
           git fetch origin
           git checkout -b publish origin/publish || git checkout --orphan publish
           
+          # Synchronize with master branch
+          git merge origin/master --no-edit || git rebase origin/master
+
           # Remove .gitignore in the publish branch
           if [ -f .gitignore ]; then
             rm .gitignore
