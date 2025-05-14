@@ -1,0 +1,15 @@
+{
+  "name": "terrain-wgpu",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "terrain_wgpu_bg.wasm",
+    "terrain_wgpu.js",
+    "terrain_wgpu.d.ts"
+  ],
+  "main": "terrain_wgpu.js",
+  "types": "terrain_wgpu.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
